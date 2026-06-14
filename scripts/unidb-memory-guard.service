@@ -1,0 +1,18 @@
+[Unit]
+Description=UniDB benchmark memory guard
+After=multi-user.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/coco/workspace/source/rust/unidb
+Environment=MEM_GUARD_LIMIT_GB=17
+Environment=MEM_GUARD_INTERVAL_SECONDS=1
+Environment=MEM_GUARD_GRACE_SECONDS=2
+Environment=MEM_GUARD_LOG_FILE=/home/coco/workspace/source/rust/unidb/.run/memory_guard.log
+Environment=MEM_GUARD_LOCK_DIR=/home/coco/workspace/source/rust/unidb/.run/memory_guard.lock
+ExecStart=/home/coco/workspace/source/rust/unidb/scripts/memory_guard.sh
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

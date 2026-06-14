@@ -1,0 +1,23 @@
+[package]
+name = "pg_gateway"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ahash = "0.8.12"
+arrow = "58"
+async-trait = "0.1"
+common = { path = "../uni5db-kv-engine/common" }
+datafusion = "53"
+futures = "0.3"
+kv_engine = { path = "../uni5db-kv-engine/kv_engine" }
+log = "0.4"
+opensrv-mysql = { path = "third_party/opensrv-mysql" }
+pgwire = "0.36"
+rustls-pki-types = "1"
+serde_json = "1.0"
+sqlparser = "0.62.0"
+tokio = { version = "1", features = ["full"] }
+
+[dev-dependencies]
+tempfile = "3"

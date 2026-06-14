@@ -1,0 +1,3 @@
+jdbc_smoke/target/
+sqlx_smoke/target/
+python_smoke/__pycache__/

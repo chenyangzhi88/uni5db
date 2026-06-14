@@ -1,0 +1,3 @@
+jdbc_smoke/target/
+python_mysqlclient_smoke/__pycache__/
+

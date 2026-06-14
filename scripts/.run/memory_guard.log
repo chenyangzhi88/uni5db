@@ -1,0 +1,2 @@
+2026-06-03 07:46:59 memory_guard started limit_gb=16 interval_seconds=1 watched=db_bench kv_engine onedis-server pg_gateway
+2026-06-03 07:52:54 killing pid=9130 comm=onedis-server rss_kb=17031312 limit_kb=16777216 args=target/release/onedis-server --config benchmarks/onedis-set-bench-local.toml

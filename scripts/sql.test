@@ -1,0 +1,52 @@
+
+  -- 1. 全表 count/max 基线
+  SELECT count(*) AS rows, max(order_id) AS max_order_id FROM orders;
+
+  -- 2. 全表 sum
+  SELECT sum(amount) AS total_amount FROM orders;
+
+  -- 3. count + sum + avg
+  SELECT count(*) AS rows, sum(amount) AS total_amount, avg(amount) AS avg_amount FROM orders;
+
+  -- 4. 主键范围条件 count
+  SELECT count(*) AS rows FROM orders WHERE order_id BETWEEN 100000 AND 900000;
+
+  -- 5. 主键范围条件 sum/max
+  SELECT sum(amount) AS total_amount, max(amount) AS max_amount
+  FROM orders
+  WHERE order_id BETWEEN 100000 AND 900000;
+
+  -- 6. 非主键条件 count
+  SELECT count(*) AS rows FROM orders WHERE status = 'paid';
+
+  -- 7. 非主键条件 sum
+  SELECT sum(amount) AS paid_amount FROM orders WHERE status = 'paid';
+
+  -- 8. 单列 group by
+  SELECT status, count(*) AS rows
+  FROM orders
+  GROUP BY status
+  ORDER BY status;
+
+  -- 9. group by + sum
+  SELECT status, count(*) AS rows, sum(amount) AS total_amount
+  FROM orders
+  GROUP BY status
+  ORDER BY status;
+
+  -- 10. 条件 + group by
+  SELECT status, count(*) AS rows, sum(amount) AS total_amount
+  FROM orders
+  WHERE order_id BETWEEN 100000 AND 900000
+  GROUP BY status
+  ORDER BY status;
+
+  这 10 条能把路径分清楚：
+
+  1：当前已优化的 key-only aggregate 基线。
+  2-3：需要 value decode 的全表聚合。
+  4：主键范围过滤，理论上应该走 bounded range scan。
+  5：主键范围 + value aggregate。
+  6-7：非主键过滤，需要读 value/filter。
+  8-9：低基数 group by。
+  10：range filter + group by 组合路径。
