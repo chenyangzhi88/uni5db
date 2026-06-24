@@ -1,4 +1,10 @@
-use super::*;
+use super::{
+    ClientInfo, ColumnValue, CommandComplete, DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME, DataType,
+    FieldFormat, GatewayMode, GatewayServer, METADATA_USER, Response, Statement, TestClient,
+    arrow_array_value_to_string, default_session, exec_sql, exec_sql_for_client, new_store,
+    plan_sql, response_field_names, response_text_rows,
+};
+use crate::types::INTERNAL_ROWID_COLUMN;
 
 #[tokio::test]
 async fn psql_list_databases_query_returns_catalog_rows() {

@@ -1,4 +1,12 @@
-use super::*;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Mutex};
+
+use common::types::options::Options;
+use kv_engine::db::{
+    DbImpl, KeyRange, RangeProjection, ScanBudget, SchemalessRangeQuery, SchemalessTable,
+};
+
+use crate::storage_layout;
 
 pub(super) fn copy_profile_enabled() -> bool {
     env_flag_enabled("PG_GATEWAY_PROFILE_COPY") || env_flag_enabled("PG_GATEWAY_PROFILE_SCAN")
@@ -81,12 +89,16 @@ pub(super) fn nanos_to_millis(nanos: u128) -> u128 {
 
 pub struct KvEngineStore {
     pub(super) db: Arc<DbImpl>,
+    pub(super) table: SchemalessTable,
 }
 
 impl KvEngineStore {
     pub fn open(options: Arc<Options>) -> Result<Self, String> {
         let db = DbImpl::open(options).map_err(|e| e.to_string())?;
-        Ok(Self { db })
+        let table = db
+            .open_default_schemaless_table()
+            .map_err(|e| e.to_string())?;
+        Ok(Self { db, table })
     }
 
     pub fn scan_range_count_for_experiment(
@@ -101,10 +113,10 @@ impl KvEngineStore {
         } else {
             RangeProjection::KeyValue
         };
-        let mut cursor = RangeCursor::open(
-            &self.db,
-            RangeQueryContext {
-                bounds: RangeBounds::new(Some(start), end),
+        let mut cursor = self
+            .table
+            .range_query(SchemalessRangeQuery {
+                bounds: KeyRange::new(Some(start), end),
                 projection,
                 budget: ScanBudget {
                     max_records_per_batch: 8192,
@@ -114,10 +126,9 @@ impl KvEngineStore {
                     max_scanned_bytes_per_batch: 32 * 1024 * 1024,
                     max_io_steps_per_batch: 1024,
                 },
-                ..RangeQueryContext::default()
-            },
-        )
-        .map_err(|e| e.to_string())?;
+                ..SchemalessRangeQuery::default()
+            })
+            .map_err(|e| e.to_string())?;
         if method == "scan_key_ref" {
             let mut rows = 0usize;
             cursor
@@ -147,7 +158,7 @@ impl KvEngineStore {
 }
 
 pub(super) struct KvEngineTransaction {
-    pub(super) db: Arc<DbImpl>,
+    pub(super) table: SchemalessTable,
     pub(super) pending: Mutex<BTreeMap<Vec<u8>, Option<Vec<u8>>>>,
 }
 

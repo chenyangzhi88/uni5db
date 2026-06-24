@@ -1,4 +1,7 @@
-use super::*;
+use pgwire::error::PgWireResult;
+
+use super::tuple_codec::read_bytes_segment;
+use crate::error::user_error;
 
 pub(super) struct Cursor<'a> {
     bytes: &'a [u8],

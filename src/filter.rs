@@ -312,9 +312,12 @@ fn compare_values(lhs: &ColumnValue, rhs: &ColumnValue, op: &BinaryOperator) -> 
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::types::ColumnSchema;
     use sqlparser::ast::{Ident, Value as SqlValue};
+
+    use super::row_matches_filter;
+    use crate::types::{ColumnValue, DataType, RowMap, TableSchema};
+    use sqlparser::ast::{BinaryOperator, Expr};
 
     fn test_schema() -> TableSchema {
         TableSchema {

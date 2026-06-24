@@ -1,7 +1,29 @@
-use super::*;
+use std::collections::{BTreeMap, btree_map::Entry};
+use std::time::Instant;
+
+use kv_engine::db::{
+    KeyRange, RangeCursor, RangeProjection, ScanBudget, SchemalessRangeQuery, SchemalessTable,
+};
+
+use super::fast_numeric_plan::{
+    build_fast_numeric_aggregate_plan, reduce_grouped_fast_numeric_scan,
+    reduce_ungrouped_fast_numeric_scan, reduce_ungrouped_projected_scan,
+};
+use super::profile::{
+    AggregateScanProfile, copy_profile_enabled, hex_sample, log_copy_profile, nanos_to_millis,
+};
+use super::projected_aggregate::{
+    apply_projected_aggregate, projected_group_values, projected_row_matches,
+    projected_values_for_aggregate_record, typed_group_key,
+};
+use crate::mem_store::{
+    KvAggregateOp, KvAggregateScan, KvAggregateState, KvScanProjection, kv_aggregate_initial_state,
+    kv_finish_aggregate_state,
+};
+use crate::types::ColumnValue;
 
 pub(super) fn execute_aggregate_scan(
-    db: &DbImpl,
+    table: &SchemalessTable,
     plan: KvAggregateScan,
 ) -> Result<Vec<Vec<ColumnValue>>, String> {
     let started_at = Instant::now();
@@ -22,10 +44,9 @@ pub(super) fn execute_aggregate_scan(
                 .unwrap_or_else(|| "none".to_string())
         ));
     }
-    let mut cursor = RangeCursor::open(
-        db,
-        RangeQueryContext {
-            bounds: RangeBounds::new(Some(plan.range_start.clone()), plan.range_end.clone()),
+    let mut cursor = table
+        .range_query(SchemalessRangeQuery {
+            bounds: KeyRange::new(Some(plan.range_start.clone()), plan.range_end.clone()),
             scan_prefix: plan.scan_prefix.clone(),
             projection: match plan.projection {
                 KvScanProjection::KeyOnly => RangeProjection::KeyOnly,
@@ -36,10 +57,9 @@ pub(super) fn execute_aggregate_scan(
                 max_bytes_per_batch: 8 * 1024 * 1024,
                 ..ScanBudget::default()
             },
-            ..RangeQueryContext::default()
-        },
-    )
-    .map_err(|e| e.to_string())?;
+            ..SchemalessRangeQuery::default()
+        })
+        .map_err(|e| e.to_string())?;
     if aggregate_plan_uses_only_primary_key(&plan) {
         if plan.group_indices.is_empty() {
             return reduce_ungrouped_key_only_scan(&mut cursor, &plan, started_at);

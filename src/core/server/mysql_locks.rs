@@ -1,4 +1,16 @@
-use super::*;
+use std::collections::{HashSet, VecDeque};
+use std::time::Instant;
+
+use pgwire::api::ClientInfo;
+use pgwire::error::{PgWireError, PgWireResult};
+
+use super::GatewayServer;
+use super::shared::{
+    MYSQL_LOCK_WAIT_TIMEOUT_METADATA, MySqlLock, MySqlLockDuration, MySqlLockKind,
+    MySqlLockPriority, MySqlLockScope, MySqlLockWaiter,
+};
+use crate::error::user_error;
+use crate::types::ColumnValue;
 
 impl GatewayServer {
     pub(super) fn normalize_mysql_lock_name(value: &str) -> String {

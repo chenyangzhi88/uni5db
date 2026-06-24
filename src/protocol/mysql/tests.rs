@@ -1,6 +1,22 @@
-use super::*;
+use std::sync::Arc;
+
+use opensrv_mysql::{AsyncMysqlShim, CapabilityFlags, ColumnFlags, ColumnType, ErrorKind};
+use pgwire::api::Type;
 use pgwire::api::results::FieldFormat;
+use pgwire::api::results::FieldInfo;
 use pgwire::messages::data::DataRow;
+
+use super::client_state::{
+    MySqlClientState, affected_rows_from_tag, decode_pg_text_row, mysql_insert_result_from_tag,
+    render_mysql_date, render_mysql_datetime, render_mysql_time,
+};
+use super::serve::MySqlBackend;
+use super::{
+    MYSQL_AUTOCOMMIT, MYSQL_CHARACTER_SET_CLIENT, MYSQL_CHARSET_BINARY, MYSQL_DEFAULT_SQL_MODE,
+    MYSQL_SQL_MODE,
+};
+use crate::core::server::GatewayServer;
+use crate::mode::GatewayMode;
 
 #[test]
 fn parses_affected_rows_from_command_tag() {

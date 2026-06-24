@@ -1,4 +1,24 @@
-use super::*;
+use std::sync::Arc;
+
+use arrow::array::{BooleanArray, Float32Array, Int32Array, StringArray};
+use arrow::datatypes::{DataType as ArrowDataType, Field, Schema as ArrowSchema};
+use arrow::record_batch::RecordBatch;
+use datafusion::catalog::SchemaProvider;
+use datafusion::datasource::memory::MemTable;
+use pgwire::error::PgWireResult;
+
+use crate::catalog::CatalogStore;
+use crate::error::user_error;
+use crate::mem_store::KvStore;
+use crate::types::DataType;
+
+use super::{
+    BTREE_AM_OID, HEAP_AM_OID, PG_CATALOG_NAMESPACE_OID, POSTGRES_ROLE_OID,
+    PRIMARY_KEY_CONSTRAINT_OID_OFFSET, UNIQUE_CONSTRAINT_OID_OFFSET, column_attnum,
+    index_relation_oid, load_table_stats, opclass_oid, pg_type_align, pg_type_byval,
+    pg_type_category, pg_type_len, pg_type_oid, pg_type_storage, table_row_type_oid,
+    type_collation_oid, view_relation_oid,
+};
 
 pub(super) struct PgTypeRow {
     oid: i32,

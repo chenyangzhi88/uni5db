@@ -1,4 +1,11 @@
-use super::*;
+use pgwire::error::PgWireResult;
+
+use super::codec::{
+    encode_index_catalog, encode_view_catalog, index_by_id_key, index_by_name_key,
+    index_by_table_key, view_by_id_key, view_by_name_key, write_database_inner, write_schema_inner,
+};
+use super::types::{CatalogStore, DatabaseCatalog, IndexCatalog, SchemaCatalog, ViewCatalog};
+use crate::error::user_error;
 
 impl CatalogStore {
     pub(super) async fn allocate_id(&self, key: &[u8]) -> PgWireResult<u32> {

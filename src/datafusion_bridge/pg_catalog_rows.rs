@@ -1,4 +1,19 @@
-use super::*;
+use std::sync::Arc;
+
+use arrow::array::{BooleanArray, Float32Array, Int32Array, StringArray};
+use arrow::datatypes::{DataType as ArrowDataType, Field, Schema as ArrowSchema};
+use arrow::record_batch::RecordBatch;
+use datafusion::catalog::SchemaProvider;
+use datafusion::datasource::memory::MemTable;
+use pgwire::error::PgWireResult;
+
+use crate::error::user_error;
+
+use super::{
+    BOOL_OPCLASS_OID, BTREE_AM_OID, DEFAULT_COLLATION_OID, HEAP_AM_OID, INT4_OPCLASS_OID,
+    INT8_OPCLASS_OID, PG_CAST_OID_OFFSET, PG_CATALOG_NAMESPACE_OID, PG_PROC_OID_OFFSET,
+    POSTGRES_ROLE_OID, TEXT_OPCLASS_OID, register_empty_table,
+};
 
 pub(super) fn catalog_function_rows()
 -> Vec<(i32, &'static str, i32, i32, &'static str, &'static str)> {

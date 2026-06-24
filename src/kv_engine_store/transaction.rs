@@ -1,4 +1,13 @@
-use super::*;
+use std::collections::BTreeMap;
+use std::time::Instant;
+
+use async_trait::async_trait;
+use kv_engine::db::{
+    KeyOrder, KeyRange, ScanBudget, SchemalessRangeQuery, SchemalessWriteBatch, WriteOptions,
+};
+
+use super::profile::{KvEngineTransaction, log_copy_profile};
+use crate::mem_store::KvTransaction;
 
 #[async_trait]
 impl KvTransaction for KvEngineTransaction {
@@ -36,15 +45,11 @@ impl KvTransaction for KvEngineTransaction {
         {
             return Ok(value);
         }
-        let db = self.db.clone();
-        let key = key.to_vec();
-        tokio::task::spawn_blocking(move || {
-            db.get(&key)
-                .map(|value| value.map(|value| value.to_vec()))
-                .map_err(|e| e.to_string())
-        })
-        .await
-        .map_err(|e| e.to_string())?
+        self.table
+            .get_async(key)
+            .await
+            .map(|value| value.map(|value| value.to_vec()))
+            .map_err(|e| e.to_string())
     }
 
     async fn has_pending_key(&self, key: &[u8]) -> Result<bool, String> {
@@ -56,18 +61,16 @@ impl KvTransaction for KvEngineTransaction {
     }
 
     async fn scan_prefix(&self, prefix: &[u8]) -> Result<Vec<(Vec<u8>, Vec<u8>)>, String> {
-        let db = self.db.clone();
+        let table = self.table.clone();
         let prefix = prefix.to_vec();
         let scan_prefix = prefix.clone();
         let mut rows = tokio::task::spawn_blocking(move || {
-            let mut cursor = RangeCursor::open(
-                &db,
-                RangeQueryContext {
-                    bounds: RangeBounds::prefix(&scan_prefix),
-                    ..RangeQueryContext::default()
-                },
-            )
-            .map_err(|e| e.to_string())?;
+            let mut cursor = table
+                .range_query(SchemalessRangeQuery {
+                    scan_prefix: Some(scan_prefix),
+                    ..SchemalessRangeQuery::default()
+                })
+                .map_err(|e| e.to_string())?;
             let mut rows = BTreeMap::new();
             loop {
                 let batch = cursor.next_batch().map_err(|e| e.to_string())?;
@@ -107,27 +110,29 @@ impl KvTransaction for KvEngineTransaction {
         limit: Option<usize>,
         reverse: bool,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, String> {
-        let db = self.db.clone();
+        let table = self.table.clone();
         let start = start.to_vec();
         let end = end.map(|end| end.to_vec());
         let mut rows = tokio::task::spawn_blocking({
             let start = start.clone();
             let end = end.clone();
             move || {
-                let mut ctx = RangeQueryContext {
-                    bounds: RangeBounds::new(Some(start), end),
-                    ..RangeQueryContext::default()
+                let mut ctx = SchemalessRangeQuery {
+                    bounds: KeyRange::new(Some(start), end),
+                    order: if reverse {
+                        KeyOrder::Desc
+                    } else {
+                        KeyOrder::Asc
+                    },
+                    ..SchemalessRangeQuery::default()
                 };
-                if reverse {
-                    ctx.direction = RangeDirection::Reverse;
-                }
                 if let Some(limit) = limit {
                     ctx.budget = ScanBudget {
                         max_records_per_batch: limit.max(1),
                         ..ScanBudget::default()
                     };
                 }
-                let mut cursor = RangeCursor::open(&db, ctx).map_err(|e| e.to_string())?;
+                let mut cursor = table.range_query(ctx).map_err(|e| e.to_string())?;
                 let mut rows = BTreeMap::new();
                 loop {
                     let batch = cursor.next_batch().map_err(|e| e.to_string())?;
@@ -182,29 +187,26 @@ impl KvTransaction for KvEngineTransaction {
         if pending.is_empty() {
             return Ok(());
         }
-        let db = self.db.clone();
-        tokio::task::spawn_blocking(move || {
-            let started_at = Instant::now();
-            let mut batch = WriteBatch::new();
-            for (key, value) in pending {
-                match value {
-                    Some(value) => batch.put(&key, &value),
-                    None => batch.delete(&key),
-                }
+        let started_at = Instant::now();
+        let mut batch = SchemalessWriteBatch::new();
+        for (key, value) in pending {
+            match value {
+                Some(value) => batch.put(&key, &value).map_err(|e| e.to_string())?,
+                None => batch.delete(&key).map_err(|e| e.to_string())?,
             }
-            let result = db
-                .write_opt(&batch, &WriteOptions { sync: false })
-                .map_err(|e| e.to_string());
-            log_copy_profile(format!(
-                "kv_txn.commit staged_ops={} elapsed_ms={} success={}",
-                staged_ops,
-                started_at.elapsed().as_millis(),
-                result.is_ok()
-            ));
-            result
-        })
-        .await
-        .map_err(|e| e.to_string())?
+        }
+        let result = self
+            .table
+            .write_opt_async(&batch, &WriteOptions { sync: false })
+            .await
+            .map_err(|e| e.to_string());
+        log_copy_profile(format!(
+            "kv_txn.commit staged_ops={} elapsed_ms={} success={}",
+            staged_ops,
+            started_at.elapsed().as_millis(),
+            result.is_ok()
+        ));
+        result
     }
 
     async fn rollback(&self) -> Result<(), String> {

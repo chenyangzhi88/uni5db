@@ -1,4 +1,21 @@
-use super::*;
+use std::sync::{Arc, Mutex};
+
+use pgwire::error::PgWireResult;
+use sqlparser::ast::Expr;
+
+use super::GatewayServer;
+use super::shared::{
+    FILTERED_LIMIT_SCAN_BATCH_SIZE, filtered_limit_scan_batch_size, next_key_prefix,
+};
+use crate::codec::{
+    decode_pk_from_index_entry_key, decode_pk_from_row_marker_key, index_entry_prefix,
+    row_marker_key, row_marker_prefix,
+};
+use crate::error::user_error;
+use crate::filter::row_matches_filter;
+use crate::mem_store::{KvRangeVisitor, KvScanProjection};
+use crate::storage_layout;
+use crate::types::{ColumnValue, RowMap, TableSchema};
 
 impl GatewayServer {
     pub(super) async fn ensure_row_write_not_stale(

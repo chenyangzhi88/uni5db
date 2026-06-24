@@ -1,4 +1,28 @@
-use super::*;
+use std::collections::HashMap;
+use std::sync::atomic::Ordering;
+
+use pgwire::api::ClientInfo;
+use pgwire::api::results::Response;
+use pgwire::error::{PgWireError, PgWireResult};
+use pgwire::messages::response::TransactionStatus;
+use sqlparser::ast::{Assignment, Expr, Ident};
+
+use super::GatewayServer;
+use super::shared::{
+    METADATA_TRANSACTION_ISOLATION, TransactionIsolation, column_value_to_i64,
+    decode_sequence_state, encode_sequence_state, mysql_auto_increment_column, sequence_state_key,
+};
+use crate::catalog::resolve_table_reference;
+use crate::core::response::{command_complete, empty_query_response};
+use crate::error::{unsupported, user_error};
+use crate::mem_store::{KvRangeVisitor, KvScanProjection};
+use crate::sql::{
+    column_default_value, extract_assignment_column, is_default_expr, nextval_sequence_name,
+    sql_expr_to_column_value,
+};
+use crate::storage_layout;
+use crate::types::MySqlIntKind;
+use crate::types::{ColumnSchema, ColumnValue, DataType, RowMap, TableSchema};
 
 impl GatewayServer {
     pub(super) async fn savepoint_session_transaction<C>(

@@ -1,4 +1,17 @@
-use super::*;
+use std::cmp::Ordering;
+use std::collections::HashMap;
+
+use pgwire::error::PgWireResult;
+use sqlparser::ast::{
+    Assignment, AssignmentTarget, BinaryOperator, Expr, Ident, Query, Select, SelectItem, SetExpr,
+    TableFactor, TableWithJoins,
+};
+
+use super::eval_core::evaluate_row_expression;
+use super::fast_path::expr_identifier_name;
+use super::values::{EvalContext, column_default_value, is_default_expr, sql_expr_to_column_value};
+use crate::error::{unsupported, user_error};
+use crate::types::{ColumnValue, DataType, ReturningProjection, RowMap, TableSchema};
 
 pub fn extract_insert_values(query: &Query) -> PgWireResult<Vec<Vec<Expr>>> {
     match query.body.as_ref() {

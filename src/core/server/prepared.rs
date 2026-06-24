@@ -1,4 +1,21 @@
-use super::*;
+use pgwire::api::portal::{Format, Portal};
+use pgwire::api::results::{FieldFormat, FieldInfo, Response};
+use pgwire::api::{ClientInfo, Type};
+use pgwire::error::PgWireResult;
+use sqlparser::ast::{Expr, ObjectType, Statement, TableObject};
+
+use super::GatewayServer;
+use super::shared::{
+    PreparedSqlExecution, PreparedSqlStatement, SessionCatalog, is_unsupported_error,
+    mysql_table_option_auto_increment,
+};
+use crate::core::response::{
+    command_complete, field_infos_for_projection, field_infos_for_returning_projection,
+};
+use crate::dialect::parser;
+use crate::error::{unsupported, user_error};
+use crate::mode::GatewayMode;
+use crate::types::QueryPlan;
 
 impl GatewayServer {
     pub(super) fn parse_sql(&self, sql: &str) -> PgWireResult<Vec<Statement>> {

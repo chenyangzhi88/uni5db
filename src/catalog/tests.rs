@@ -1,5 +1,8 @@
-use super::*;
-use crate::types::{ColumnSchema, DataType};
+use std::sync::Arc;
+
+use super::{CatalogStore, DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME, resolve_table_reference};
+use crate::mode::GatewayMode;
+use crate::types::{ColumnSchema, DataType, TableSchema};
 
 fn catalog() -> CatalogStore {
     CatalogStore::new(Arc::new(crate::mem_store::MemoryKvStore::new()))

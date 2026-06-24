@@ -1,4 +1,17 @@
-use super::*;
+use std::sync::Arc;
+
+use arrow::array::{ArrayRef, Int32Array, Int64Array, StringArray};
+use arrow::datatypes::{DataType as ArrowDataType, Field, Schema as ArrowSchema};
+use arrow::record_batch::RecordBatch;
+use datafusion::catalog::SchemaProvider;
+use datafusion::datasource::memory::MemTable;
+use pgwire::error::PgWireResult;
+
+use crate::catalog::IndexCatalog;
+use crate::error::user_error;
+use crate::types::{DataType, TableSchema};
+
+use super::register_empty_table;
 
 pub(super) fn register_mysql_information_schema_static_tables(
     schema_provider: &Arc<dyn SchemaProvider>,

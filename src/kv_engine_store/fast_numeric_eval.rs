@@ -1,4 +1,11 @@
-use super::*;
+use super::fast_numeric_plan::{
+    column_value_to_fast_numeric, compare_fast_numeric_values, fast_numeric_as_f64,
+    fast_numeric_cmp, fast_numeric_to_column_value,
+};
+use super::profile::{FastAggregateState, FastNumericAggregatePlan, FastNumericGroupKey};
+use crate::mem_store::{KvAggregateOp, KvAggregateScan, KvCompareOp, KvPredicate};
+use crate::storage_layout;
+use crate::types::ColumnValue;
 
 pub(super) fn fast_aggregate_predicate_matches(
     predicate: &KvPredicate,

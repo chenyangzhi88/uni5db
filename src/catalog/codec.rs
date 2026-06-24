@@ -1,4 +1,18 @@
-use super::*;
+use std::sync::Arc;
+
+use pgwire::error::PgWireResult;
+use serde_json::{Value, json};
+use sqlparser::ast::{ObjectName, SchemaName};
+
+use super::types::{
+    DEFAULT_SCHEMA_NAME, DatabaseCatalog, IndexCatalog, SchemaCatalog, TableCatalog, ViewCatalog,
+};
+use crate::error::{unsupported, user_error};
+use crate::mem_store::KvStore;
+use crate::types::{
+    CheckConstraintSchema, ColumnSchema, ForeignKeyConstraintSchema, TableSchema,
+    UniqueConstraintSchema, parse_column_schema,
+};
 
 pub fn decode_table_schema(_table_name: &str, bytes: &[u8]) -> PgWireResult<TableSchema> {
     let catalog = decode_table_catalog(bytes)?;

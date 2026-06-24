@@ -1,4 +1,9 @@
-use super::*;
+use super::{
+    ClientInfo, ColumnValue, DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME, DataType, FieldFormat,
+    GatewayServer, METADATA_SEARCH_PATH, PgWireError, QueryPlan, ReadAccess, Response, TestClient,
+    Type, WriteAccess, analytics_session, default_session, exec_sql, exec_sql_for_client,
+    index_entry_prefix, new_store, plan_sql, response_field_names,
+};
 
 #[tokio::test]
 async fn insert_returning_with_expression_projection() {

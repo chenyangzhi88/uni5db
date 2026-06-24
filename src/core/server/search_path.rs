@@ -1,4 +1,23 @@
-use super::*;
+use std::fmt::Debug;
+
+use futures::Sink;
+use pgwire::api::ClientInfo;
+use pgwire::api::results::{FieldFormat, Response};
+use pgwire::error::{PgWireError, PgWireResult};
+use pgwire::messages::PgWireBackendMessage;
+use pgwire::messages::response::TransactionStatus;
+use sqlparser::ast::{
+    CopySource, CopyTarget, Expr, Ident, ObjectName, Query, SetExpr, Statement, TableObject,
+    TableWithJoins,
+};
+
+use super::GatewayServer;
+use super::shared::{PreparedSqlExecution, is_pg_catalog_relation_name, is_unsupported_error};
+use crate::catalog::{object_name_to_string, resolve_table_reference};
+use crate::core::response::{command_complete, empty_query_response};
+use crate::error::{unsupported, user_error};
+use crate::mode::GatewayMode;
+use crate::types::{ColumnSchema, DataType, TableSchema};
 
 impl GatewayServer {
     pub(super) async fn qualify_sql_for_search_path(

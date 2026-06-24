@@ -1,5 +1,12 @@
-use super::*;
-use crate::types::ColumnSchema;
+use sqlparser::ast::{BinaryOperator, Expr, Ident, Value as SqlValue};
+
+use super::operators::{compare_row_values, mysql_text_to_number};
+use super::{
+    EvalContext, build_insert_row, evaluate_row_expression, expr_identifier_name,
+    extract_primary_key_filter, extract_primary_key_range_filter, parse_text_for_type,
+    sql_expr_to_column_value, supports_fast_path_filter,
+};
+use crate::types::{ColumnSchema, ColumnValue, DataType, MySqlIntKind, RowMap, TableSchema};
 
 fn make_expr_number(n: &str) -> Expr {
     Expr::Value(SqlValue::Number(n.into(), false).into())
@@ -175,6 +182,45 @@ fn convert_mysql_unsigned_bit_and_year_bounds() {
         ColumnValue::Int32(2026)
     );
     assert!(sql_expr_to_column_value(&make_expr_number("10000"), &DataType::Year).is_err());
+}
+
+#[test]
+fn parse_array_text_handles_quoted_escaped_and_nested_values() {
+    let value = parse_text_for_type(
+        r#"{"a,b","c\"d","NULL",NULL}"#,
+        &DataType::Array(Box::new(DataType::Text)),
+    )
+    .unwrap();
+    assert_eq!(
+        value,
+        ColumnValue::Array(vec![
+            ColumnValue::Text("a,b".into()),
+            ColumnValue::Text("c\"d".into()),
+            ColumnValue::Text("NULL".into()),
+            ColumnValue::Null,
+        ])
+    );
+
+    let nested = parse_text_for_type(
+        "{{1,2},{3,4}}",
+        &DataType::Array(Box::new(DataType::Array(Box::new(DataType::Int32)))),
+    )
+    .unwrap();
+    assert_eq!(
+        nested,
+        ColumnValue::Array(vec![
+            ColumnValue::Array(vec![ColumnValue::Int32(1), ColumnValue::Int32(2)]),
+            ColumnValue::Array(vec![ColumnValue::Int32(3), ColumnValue::Int32(4)]),
+        ])
+    );
+
+    assert!(
+        parse_text_for_type(
+            r#"{"unterminated}"#,
+            &DataType::Array(Box::new(DataType::Text))
+        )
+        .is_err()
+    );
 }
 
 // ── build_insert_row ──────────────────────────────────────────────

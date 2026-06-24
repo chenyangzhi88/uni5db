@@ -1,4 +1,22 @@
-use super::*;
+use std::time::Instant;
+
+use pgwire::api::ClientInfo;
+use pgwire::api::results::{CopyResponse, Response};
+use pgwire::error::PgWireResult;
+use sqlparser::ast::{CopyLegacyCsvOption, CopyLegacyOption, CopyOption, Ident, ObjectName};
+
+use super::GatewayServer;
+use super::shared::{
+    COPY_WRITE_BATCH_MAX_ENTRIES, COPY_WRITE_BATCH_MAX_ROWS, CopyInFormat, CopyInOptions,
+    CopyInState, MySqlLoadDataLocalSpec, SessionCatalog, log_copy_profile,
+    parse_mysql_identifier_token, parse_mysql_quoted_literal, single_char_literal,
+    strip_mysql_identifier_token,
+};
+use crate::catalog::object_name_to_string;
+use crate::codec::{index_entry_key, index_entry_prefix};
+use crate::error::{unsupported, user_error};
+use crate::storage_layout;
+use crate::types::{ColumnValue, DataType, RowMap};
 
 impl GatewayServer {
     pub(super) fn parse_copy_in_options(

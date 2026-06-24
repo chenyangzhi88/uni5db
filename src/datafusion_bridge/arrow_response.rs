@@ -1,4 +1,14 @@
-use super::*;
+use std::sync::Arc;
+
+use arrow::array::{
+    Array, ArrayRef, BinaryArray, BooleanArray, Int32Array, Int64Array, ListArray, StringArray,
+};
+use arrow::datatypes::DataType as ArrowDataType;
+use arrow::record_batch::RecordBatch;
+use futures::stream;
+use pgwire::api::Type;
+use pgwire::api::results::{DataRowEncoder, FieldFormat, FieldInfo, QueryResponse, Response};
+use pgwire::error::PgWireResult;
 
 pub(super) fn arrow_type_to_pg(dt: &ArrowDataType) -> Type {
     match dt {

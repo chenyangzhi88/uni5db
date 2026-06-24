@@ -1,4 +1,9 @@
-use super::*;
+use super::{
+    ClientInfo, ColumnValue, DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME, DataType, GatewayMode,
+    GatewayServer, METADATA_DATABASE, METADATA_USER, PgWireError, QueryPlan, ReadAccess, Response,
+    TestClient, default_session, exec_sql, exec_sql_for_client, is_unsupported_error, new_store,
+    plan_sql, response_field_names, response_text_rows, storage_layout,
+};
 
 #[tokio::test]
 async fn allocate_table_id_increments() {

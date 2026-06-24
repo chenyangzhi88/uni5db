@@ -1,4 +1,20 @@
-use super::*;
+use std::sync::{Arc, Mutex, atomic::Ordering as AtomicOrdering};
+use std::time::Instant;
+
+use arrow::record_batch::RecordBatch;
+use datafusion::common::Result as DfResult;
+use datafusion::logical_expr::{Expr as DfExpr, Operator};
+
+use crate::codec::{cell_key, decode_cell_value, decode_pk_from_row_marker_key, row_marker_prefix};
+use crate::mem_store::{KvAggregateScan, KvRangeVisitor, KvScanProjection};
+use crate::storage_layout;
+use crate::types::{ColumnValue, RowMap};
+
+use super::{
+    FastTopNCandidate, FastTopNScanPlan, KvScanPlan, KvTableProvider, KvTopNPlan, TopNCandidate,
+    TopNScanProfile, compare_column_values, elapsed_ns_u64, reverse_operator,
+    scalar_value_to_column_value, scan_profile_enabled,
+};
 
 impl KvTableProvider {
     pub(super) async fn execute_topn_scan(&self, plan: &KvTopNPlan) -> DfResult<RecordBatch> {

@@ -1,4 +1,40 @@
-use super::*;
+use std::fmt::Debug;
+use std::sync::Arc;
+use std::time::Instant;
+
+use async_trait::async_trait;
+use futures::{Sink, SinkExt};
+use pgwire::api::PgWireConnectionState;
+use pgwire::api::auth::sasl::{SASLState, scram};
+use pgwire::api::auth::{
+    AuthSource, DefaultServerParameterProvider, LoginInfo, ServerParameterProvider, StartupHandler,
+};
+use pgwire::api::cancel::CancelHandler;
+use pgwire::api::copy::CopyHandler;
+use pgwire::api::portal::Portal;
+use pgwire::api::query::{ExtendedQueryHandler, SimpleQueryHandler};
+use pgwire::api::results::{
+    DescribePortalResponse, DescribeStatementResponse, FieldFormat, Response, Tag,
+};
+use pgwire::api::stmt::{NoopQueryParser, StoredStatement};
+use pgwire::api::{ClientInfo, METADATA_DATABASE, METADATA_USER, PgWireServerHandlers, Type};
+use pgwire::error::{PgWireError, PgWireResult};
+use pgwire::messages::cancel::CancelRequest;
+use pgwire::messages::copy::{CopyData, CopyDone, CopyFail};
+use pgwire::messages::response::{ReadyForQuery, TransactionStatus};
+use pgwire::messages::startup::{
+    Authentication, BackendKeyData, ParameterStatus, PasswordMessageFamily,
+};
+use pgwire::messages::{PgWireBackendMessage, PgWireFrontendMessage};
+
+use super::GatewayServer;
+use super::shared::{
+    GatewayAuthMethod, GatewayAuthSource, GatewayStartupHandler, METADATA_CURRENT_SCHEMA,
+    METADATA_SEARCH_PATH, log_copy_profile, parse_search_path,
+};
+use crate::error::{unsupported, user_error};
+use crate::mem_store::KvStore;
+use crate::mode::GatewayMode;
 
 impl GatewayServer {
     pub(crate) async fn post_startup<C>(&self, client: &mut C) -> PgWireResult<()>

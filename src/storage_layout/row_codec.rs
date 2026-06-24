@@ -1,4 +1,21 @@
-use super::*;
+use pgwire::error::PgWireResult;
+
+use super::cursor::Cursor;
+use super::fast_row_decode::{
+    decode_fast_row_record_fast_numeric_with, decode_fast_row_record_projected,
+    decode_fast_row_record_projected_values_with, decode_fixed_row_numeric_slot,
+    decode_fixed_row_record, decode_fixed_row_record_fast_numeric_with,
+    decode_fixed_row_record_projected, decode_fixed_row_record_projected_values_with,
+    decode_legacy_row_record_fast_numeric_with, decode_row_record_raw,
+};
+use super::keys::{FAST_ROW_VERSION, FIXED_ROW_VERSION, MvccMeta, VERSION};
+use super::olap_stats::is_row_tombstone;
+use super::tuple_codec::{
+    decode_tuple_value, encode_fixed_value, encode_tuple_value, fixed_offsets, fixed_width,
+    skip_tuple_value,
+};
+use crate::error::user_error;
+use crate::types::{ColumnValue, DataType, RowMap, TableSchema};
 
 pub fn encode_row_record(schema: &TableSchema, row: &RowMap) -> Vec<u8> {
     encode_row_record_with_mvcc(schema, row, MvccMeta::default())

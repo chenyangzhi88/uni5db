@@ -1,4 +1,25 @@
-use super::*;
+use std::sync::Arc;
+
+use pgwire::error::PgWireResult;
+
+use super::codec::{
+    database_by_id_key, database_by_name_key, decode_database_catalog, decode_index_catalog,
+    decode_schema_catalog, decode_table_catalog, decode_view_catalog, encode_legacy_table_schema,
+    encode_table_catalog, index_by_id_key, index_by_name_key, index_by_table_prefix,
+    schema_by_id_key, schema_by_name_key, table_by_id_key, table_by_name_key, view_by_id_key,
+    view_by_name_key,
+};
+use super::legacy::decode_u32;
+use super::types::{
+    COMPAT_MODE_KEY, CatalogStore, DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME, DatabaseCatalog,
+    IndexCatalog, NEXT_DATABASE_ID_KEY, NEXT_INDEX_ID_KEY, NEXT_SCHEMA_ID_KEY, NEXT_TABLE_ID_KEY,
+    NEXT_VIEW_ID_KEY, SchemaCatalog, TableCatalog, ViewCatalog,
+};
+use crate::codec::{SCHEMA_PREFIX, schema_key};
+use crate::error::user_error;
+use crate::mem_store::KvStore;
+use crate::mode::GatewayMode;
+use crate::types::TableSchema;
 
 impl CatalogStore {
     pub fn new(store: Arc<dyn KvStore>) -> Self {

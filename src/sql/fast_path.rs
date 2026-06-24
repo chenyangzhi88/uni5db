@@ -1,4 +1,7 @@
-use super::*;
+use pgwire::error::PgWireResult;
+use sqlparser::ast::{BinaryOperator, Expr, Ident, Select, SelectItem};
+
+use crate::error::unsupported;
 
 pub fn supports_fast_path_projection(select: &Select) -> bool {
     select.projection.iter().all(|item| match item {

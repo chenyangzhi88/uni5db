@@ -1,18 +1,30 @@
-use super::*;
 use std::collections::HashMap;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::sync::Arc;
 
 use common::types::options::Options;
 use futures::StreamExt;
-use pgwire::api::PgWireConnectionState;
+use pgwire::api::results::{FieldFormat, Response};
+use pgwire::api::{ClientInfo, METADATA_DATABASE, PgWireConnectionState};
+use pgwire::error::PgWireResult;
 use pgwire::messages::ProtocolVersion;
 use pgwire::messages::response::TransactionStatus;
 use pgwire::messages::startup::SecretKey;
+use sqlparser::ast::Statement;
 use tempfile::tempdir;
 
 use crate::catalog::{DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME};
+use crate::core::response::empty_query_response;
+use crate::core::server::GatewayServer;
+use crate::core::server::shared::{
+    METADATA_CURRENT_SCHEMA, METADATA_SEARCH_PATH, PreparedSqlExecution, SessionCatalog,
+    is_unsupported_error,
+};
+use crate::error::user_error;
 use crate::kv_engine_store::KvEngineStore;
+use crate::mem_store::KvStore;
+use crate::mode::GatewayMode;
+use crate::types::QueryPlan;
 
 pub(super) fn new_store() -> Arc<dyn KvStore> {
     Arc::new(crate::mem_store::MemoryKvStore::new())

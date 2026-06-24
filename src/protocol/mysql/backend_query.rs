@@ -1,4 +1,15 @@
-use super::*;
+use opensrv_mysql::{ErrorKind, OkResponse, QueryResultWriter};
+use pgwire::messages::response::TransactionStatus;
+use tokio::io::AsyncWrite;
+
+use crate::dialect::parser::{self, SqlDialect};
+
+use super::{
+    MYSQL_AUTOCOMMIT, MYSQL_CHARACTER_SET_CLIENT, MYSQL_CHARACTER_SET_CONNECTION,
+    MYSQL_CHARACTER_SET_RESULTS, MYSQL_DEFAULT_SQL_MODE, MYSQL_LOCK_WAIT_TIMEOUT,
+    MYSQL_SERVER_VERSION, MYSQL_SQL_MODE, MYSQL_TIME_ZONE, MYSQL_TRANSACTION_ISOLATION,
+    MySqlBackend,
+};
 
 impl MySqlBackend {
     pub(super) async fn handle_query<'a, W>(

@@ -90,8 +90,8 @@ fn strip_mysql_identifier(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use sqlparser::ast::{OnInsert, SetExpr};
+    use super::parse_sql;
+    use sqlparser::ast::{OnInsert, SetExpr, Statement};
 
     #[test]
     fn rewrites_show_tables_to_information_schema_query() {

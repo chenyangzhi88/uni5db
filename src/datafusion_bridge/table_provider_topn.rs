@@ -1,4 +1,17 @@
-use super::*;
+use std::cmp::Ordering;
+use std::collections::BTreeSet;
+
+use arrow::record_batch::RecordBatch;
+use datafusion::common::Result as DfResult;
+use datafusion::logical_expr::Expr as DfExpr;
+
+use crate::mem_store::{KvCompareOp, KvPredicate};
+use crate::storage_layout;
+use crate::types::{ColumnValue, DataType, RowMap};
+
+use super::{
+    FastPredicate, FastTopNCandidate, FastTopNScanPlan, KvTableProvider, KvTopNPlan, TopNCandidate,
+};
 
 impl KvTableProvider {
     pub(super) async fn load_batches_with_pushdown(

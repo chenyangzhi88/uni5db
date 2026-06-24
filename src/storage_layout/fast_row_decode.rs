@@ -1,4 +1,18 @@
-use super::*;
+use std::collections::BTreeMap;
+
+use pgwire::error::PgWireResult;
+
+use super::cursor::Cursor;
+use super::keys::{FAST_ROW_VERSION, FIXED_ROW_VERSION, MvccMeta, RowRecord, VERSION};
+use super::row_codec::{
+    FastNumericDirectSlot, FastNumericProjector, FastNumericValue, RowValueProjector,
+};
+use super::tuple_codec::{
+    decode_fixed_numeric_value, decode_fixed_value, decode_tuple_numeric_value, decode_tuple_value,
+    fixed_offsets_for_columns, fixed_width, skip_tuple_value, variable_positions_for_columns,
+};
+use crate::error::user_error;
+use crate::types::{ColumnValue, RowMap, TableSchema};
 
 pub fn decode_row_record_raw(bytes: &[u8]) -> PgWireResult<RowRecord> {
     let mut cursor = Cursor::new(bytes);

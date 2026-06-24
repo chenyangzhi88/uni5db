@@ -1,4 +1,9 @@
-use super::*;
+use super::fast_numeric_plan::required_slot;
+use crate::mem_store::{
+    KvAggregateOp, KvAggregateScan, KvAggregateState, KvCompareOp, KvPredicate,
+};
+use crate::storage_layout;
+use crate::types::{ColumnValue, TableSchema};
 
 pub(super) fn projected_value<'a>(
     plan: &KvAggregateScan,

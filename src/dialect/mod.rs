@@ -60,7 +60,8 @@ pub fn profile(mode: GatewayMode) -> DialectProfile {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{TransactionIsolationLevel, profile};
+    use crate::mode::GatewayMode;
 
     #[test]
     fn postgres_profile_uses_postgres_transaction_defaults() {

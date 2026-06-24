@@ -1,4 +1,15 @@
-use super::*;
+use std::collections::BTreeSet;
+use std::sync::Arc;
+
+use arrow::datatypes::Schema as ArrowSchema;
+use arrow::record_batch::{RecordBatch, RecordBatchOptions};
+use datafusion::common::Result as DfResult;
+use datafusion::logical_expr::Expr as DfExpr;
+
+use crate::mem_store::KvStore;
+use crate::types::{ColumnValue, RowMap, TableSchema};
+
+use super::{ColumnBuilder, KvTableProvider, to_arrow_schema};
 
 impl KvTableProvider {
     pub fn new(

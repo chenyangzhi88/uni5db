@@ -1,4 +1,26 @@
-use super::*;
+use std::collections::{BTreeSet, HashMap};
+use std::time::Instant;
+
+use kv_engine::db::RangeCursor;
+
+use super::fast_numeric_eval::{
+    apply_fast_aggregates, fast_aggregate_initial_state, fast_aggregate_predicate_matches,
+    fast_numeric_group_key, fast_numeric_group_values, finish_fast_aggregates,
+    finish_fast_grouped_aggregate_row, initial_fast_aggregate_states,
+};
+use super::profile::{
+    AggregateScanProfile, FastNumericAggregatePlan, FastNumericGroupMap, copy_profile_enabled,
+    log_copy_profile, nanos_to_millis,
+};
+use super::projected_aggregate::{
+    apply_projected_aggregate, projected_row_matches, projected_values_for_aggregate_record,
+};
+use crate::mem_store::{
+    KvAggregateOp, KvAggregateScan, KvCompareOp, KvPredicate, KvScanProjection,
+    kv_aggregate_initial_state, kv_finish_aggregate_state,
+};
+use crate::storage_layout;
+use crate::types::ColumnValue;
 
 pub(super) fn build_fast_numeric_aggregate_plan(
     plan: &KvAggregateScan,

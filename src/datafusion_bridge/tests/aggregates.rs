@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    Arc, BooleanArray, ColumnValue, Int32Array, Int64Array, RowMap, SessionContext, StringArray,
+    decode_table_schema, olap_schema, register_all_tables, register_schema_and_rows,
+};
 
 #[tokio::test]
 async fn datafusion_boolean_filter_pushdown_query() {

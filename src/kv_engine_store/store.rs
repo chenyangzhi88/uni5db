@@ -1,38 +1,40 @@
-use super::*;
+use std::collections::BTreeMap;
+use std::sync::Mutex;
+
+use async_trait::async_trait;
+use kv_engine::db::{
+    KeyOrder, KeyRange, RangeProjection, ScanBudget, SchemalessRangeQuery, SchemalessWriteBatch,
+    WriteOptions,
+};
+
+use super::aggregate_scan::execute_aggregate_scan;
+use super::profile::{KvEngineStore, KvEngineTransaction};
+use crate::mem_store::{KvAggregateScan, KvRangeVisitor, KvScanProjection, KvStore, KvTransaction};
+use crate::storage_layout;
+use crate::types::{ColumnValue, TableSchema};
 
 #[async_trait]
 impl KvStore for KvEngineStore {
     async fn put(&self, key: &[u8], value: &[u8]) -> Result<(), String> {
-        let db = self.db.clone();
-        let key = key.to_vec();
-        let value = value.to_vec();
-        tokio::task::spawn_blocking(move || {
-            db.put_opt(&key, &value, &WriteOptions { sync: false })
-                .map_err(|e| e.to_string())
-        })
-        .await
-        .map_err(|e| e.to_string())?
+        self.table
+            .put_opt_async(key, value, &WriteOptions { sync: false })
+            .await
+            .map_err(|e| e.to_string())
     }
 
     async fn put_batch(&self, entries: Vec<(Vec<u8>, Vec<u8>)>) -> Result<(), String> {
-        let db = self.db.clone();
-        tokio::task::spawn_blocking(move || {
-            let mut batch = WriteBatch::new();
-            for (key, value) in entries {
-                batch.put(&key, &value);
-            }
-            db.write_opt(&batch, &WriteOptions { sync: false })
-                .map_err(|e| e.to_string())
-        })
-        .await
-        .map_err(|e| e.to_string())?
+        let mut batch = SchemalessWriteBatch::new();
+        for (key, value) in entries {
+            batch.put(&key, &value).map_err(|e| e.to_string())?;
+        }
+        self.table
+            .write_opt_async(&batch, &WriteOptions { sync: false })
+            .await
+            .map_err(|e| e.to_string())
     }
 
     async fn sync_wal(&self) -> Result<(), String> {
-        let db = self.db.clone();
-        tokio::task::spawn_blocking(move || db.sync_wal().map_err(|e| e.to_string()))
-            .await
-            .map_err(|e| e.to_string())?
+        self.db.sync_wal_async().await.map_err(|e| e.to_string())
     }
 
     async fn rewrite_table_rows_to_fast_format(
@@ -41,17 +43,16 @@ impl KvStore for KvEngineStore {
         batch_size: usize,
     ) -> Result<(usize, usize), String> {
         let db = self.db.clone();
+        let table = self.table.clone();
         tokio::task::spawn_blocking(move || {
             let range = storage_layout::row_range(schema.table_id, schema.table_epoch, None);
-            let mut cursor = RangeCursor::open(
-                &db,
-                RangeQueryContext {
-                    bounds: RangeBounds::new(Some(range.start), range.end),
+            let mut cursor = table
+                .range_query(SchemalessRangeQuery {
+                    bounds: KeyRange::new(Some(range.start), range.end),
                     projection: RangeProjection::KeyValue,
-                    ..RangeQueryContext::default()
-                },
-            )
-            .map_err(|e| e.to_string())?;
+                    ..SchemalessRangeQuery::default()
+                })
+                .map_err(|e| e.to_string())?;
             let mut scanned = 0usize;
             let mut rewritten = 0usize;
             let mut pending = Vec::<(Vec<u8>, Vec<u8>)>::with_capacity(batch_size.max(1));
@@ -69,11 +70,12 @@ impl KvStore for KvEngineStore {
                         rewritten = rewritten.saturating_add(1);
                     }
                     if pending.len() >= batch_size.max(1) {
-                        let mut write_batch = WriteBatch::new();
+                        let mut write_batch = SchemalessWriteBatch::new();
                         for (key, value) in pending.drain(..) {
-                            write_batch.put(&key, &value);
+                            write_batch.put(&key, &value).map_err(|e| e.to_string())?;
                         }
-                        db.write_opt(&write_batch, &WriteOptions { sync: false })
+                        table
+                            .write_opt(&write_batch, &WriteOptions { sync: false })
                             .map_err(|e| e.to_string())?;
                     }
                 }
@@ -82,11 +84,12 @@ impl KvStore for KvEngineStore {
                 }
             }
             if !pending.is_empty() {
-                let mut write_batch = WriteBatch::new();
+                let mut write_batch = SchemalessWriteBatch::new();
                 for (key, value) in pending.drain(..) {
-                    write_batch.put(&key, &value);
+                    write_batch.put(&key, &value).map_err(|e| e.to_string())?;
                 }
-                db.write_opt(&write_batch, &WriteOptions { sync: false })
+                table
+                    .write_opt(&write_batch, &WriteOptions { sync: false })
                     .map_err(|e| e.to_string())?;
             }
             db.sync_wal().map_err(|e| e.to_string())?;
@@ -106,56 +109,43 @@ impl KvStore for KvEngineStore {
     }
 
     async fn delete(&self, key: &[u8]) -> Result<(), String> {
-        let db = self.db.clone();
-        let key = key.to_vec();
-        tokio::task::spawn_blocking(move || {
-            db.delete_opt(&key, &WriteOptions { sync: false })
-                .map_err(|e| e.to_string())
-        })
-        .await
-        .map_err(|e| e.to_string())?
+        self.table
+            .delete_opt_async(key, &WriteOptions { sync: false })
+            .await
+            .map_err(|e| e.to_string())
     }
 
     async fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
-        let db = self.db.clone();
-        let key = key.to_vec();
-        tokio::task::spawn_blocking(move || {
-            db.get(&key)
-                .map(|value| value.map(|bytes| bytes.to_vec()))
-                .map_err(|e| e.to_string())
-        })
-        .await
-        .map_err(|e| e.to_string())?
+        self.table
+            .get_async(key)
+            .await
+            .map(|value| value.map(|bytes| bytes.to_vec()))
+            .map_err(|e| e.to_string())
     }
 
     async fn multi_get(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<Vec<u8>>>, String> {
-        let db = self.db.clone();
-        tokio::task::spawn_blocking(move || {
-            db.multi_get(&keys)
-                .map(|values| {
-                    values
-                        .into_iter()
-                        .map(|value| value.map(|bytes| bytes.to_vec()))
-                        .collect::<Vec<_>>()
-                })
-                .map_err(|e| e.to_string())
-        })
-        .await
-        .map_err(|e| e.to_string())?
+        self.table
+            .multi_get_async(&keys)
+            .await
+            .map(|values| {
+                values
+                    .into_iter()
+                    .map(|value| value.map(|bytes| bytes.to_vec()))
+                    .collect::<Vec<_>>()
+            })
+            .map_err(|e| e.to_string())
     }
 
     async fn scan_prefix(&self, prefix: &[u8]) -> Result<Vec<(Vec<u8>, Vec<u8>)>, String> {
-        let db = self.db.clone();
+        let table = self.table.clone();
         let prefix = prefix.to_vec();
         tokio::task::spawn_blocking(move || {
-            let mut cursor = RangeCursor::open(
-                &db,
-                RangeQueryContext {
-                    bounds: RangeBounds::prefix(&prefix),
-                    ..RangeQueryContext::default()
-                },
-            )
-            .map_err(|e| e.to_string())?;
+            let mut cursor = table
+                .range_query(SchemalessRangeQuery {
+                    scan_prefix: Some(prefix),
+                    ..SchemalessRangeQuery::default()
+                })
+                .map_err(|e| e.to_string())?;
             let mut rows = Vec::new();
             loop {
                 let batch = cursor.next_batch().map_err(|e| e.to_string())?;
@@ -181,24 +171,26 @@ impl KvStore for KvEngineStore {
         limit: Option<usize>,
         reverse: bool,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, String> {
-        let db = self.db.clone();
+        let table = self.table.clone();
         let start = start.to_vec();
         let end = end.map(|end| end.to_vec());
         tokio::task::spawn_blocking(move || {
-            let mut ctx = RangeQueryContext {
-                bounds: RangeBounds::new(Some(start), end),
-                ..RangeQueryContext::default()
+            let mut ctx = SchemalessRangeQuery {
+                bounds: KeyRange::new(Some(start), end),
+                order: if reverse {
+                    KeyOrder::Desc
+                } else {
+                    KeyOrder::Asc
+                },
+                ..SchemalessRangeQuery::default()
             };
-            if reverse {
-                ctx.direction = RangeDirection::Reverse;
-            }
             if let Some(limit) = limit {
                 ctx.budget = ScanBudget {
                     max_records_per_batch: limit.max(1),
                     ..ScanBudget::default()
                 };
             }
-            let mut cursor = RangeCursor::open(&db, ctx).map_err(|e| e.to_string())?;
+            let mut cursor = table.range_query(ctx).map_err(|e| e.to_string())?;
             let mut rows = Vec::new();
             loop {
                 let batch = cursor.next_batch().map_err(|e| e.to_string())?;
@@ -228,31 +220,29 @@ impl KvStore for KvEngineStore {
         reverse: bool,
         projection: KvScanProjection,
     ) -> Result<Vec<(Vec<u8>, Option<Vec<u8>>)>, String> {
-        use kv_engine::db::RangeProjection;
-
-        let db = self.db.clone();
+        let table = self.table.clone();
         let start = start.to_vec();
         let end = end.map(|end| end.to_vec());
         tokio::task::spawn_blocking(move || {
-            let ctx = RangeQueryContext {
-                bounds: RangeBounds::new(Some(start), end),
+            let ctx = SchemalessRangeQuery {
+                bounds: KeyRange::new(Some(start), end),
                 projection: match projection {
                     KvScanProjection::KeyOnly => RangeProjection::KeyOnly,
                     KvScanProjection::KeyValue => RangeProjection::KeyValue,
                 },
-                direction: if reverse {
-                    RangeDirection::Reverse
+                order: if reverse {
+                    KeyOrder::Desc
                 } else {
-                    RangeDirection::Forward
+                    KeyOrder::Asc
                 },
                 budget: ScanBudget {
                     max_records_per_batch: limit.unwrap_or(65_536).max(1),
                     max_bytes_per_batch: 8 * 1024 * 1024,
                     ..ScanBudget::default()
                 },
-                ..RangeQueryContext::default()
+                ..SchemalessRangeQuery::default()
             };
-            let mut cursor = RangeCursor::open(&db, ctx).map_err(|e| e.to_string())?;
+            let mut cursor = table.range_query(ctx).map_err(|e| e.to_string())?;
             let mut rows = Vec::new();
             loop {
                 let batch = cursor.next_batch().map_err(|e| e.to_string())?;
@@ -282,29 +272,29 @@ impl KvStore for KvEngineStore {
         projection: KvScanProjection,
         visitor: KvRangeVisitor,
     ) -> Result<(), String> {
-        let db = self.db.clone();
+        let table = self.table.clone();
         let start = start.to_vec();
         let end = end.map(|end| end.to_vec());
         tokio::task::spawn_blocking(move || {
-            let ctx = RangeQueryContext {
-                bounds: RangeBounds::new(Some(start), end),
+            let ctx = SchemalessRangeQuery {
+                bounds: KeyRange::new(Some(start), end),
                 projection: match projection {
                     KvScanProjection::KeyOnly => RangeProjection::KeyOnly,
                     KvScanProjection::KeyValue => RangeProjection::KeyValue,
                 },
-                direction: if reverse {
-                    RangeDirection::Reverse
+                order: if reverse {
+                    KeyOrder::Desc
                 } else {
-                    RangeDirection::Forward
+                    KeyOrder::Asc
                 },
                 budget: ScanBudget {
                     max_records_per_batch: 65_536,
                     max_bytes_per_batch: 8 * 1024 * 1024,
                     ..ScanBudget::default()
                 },
-                ..RangeQueryContext::default()
+                ..SchemalessRangeQuery::default()
             };
-            let mut cursor = RangeCursor::open(&db, ctx).map_err(|e| e.to_string())?;
+            let mut cursor = table.range_query(ctx).map_err(|e| e.to_string())?;
             let mut visitor_error = None;
             let mut visitor = visitor.lock().map_err(|e| e.to_string())?;
             cursor
@@ -326,24 +316,22 @@ impl KvStore for KvEngineStore {
     }
 
     async fn count_range(&self, start: &[u8], end: Option<&[u8]>) -> Result<u64, String> {
-        let db = self.db.clone();
+        let table = self.table.clone();
         let start = start.to_vec();
         let end = end.map(|end| end.to_vec());
         tokio::task::spawn_blocking(move || {
-            let mut cursor = RangeCursor::open(
-                &db,
-                RangeQueryContext {
-                    bounds: RangeBounds::new(Some(start), end),
+            let mut cursor = table
+                .range_query(SchemalessRangeQuery {
+                    bounds: KeyRange::new(Some(start), end),
                     projection: RangeProjection::KeyOnly,
                     budget: ScanBudget {
                         max_records_per_batch: 65_536,
                         max_bytes_per_batch: 8 * 1024 * 1024,
                         ..ScanBudget::default()
                     },
-                    ..RangeQueryContext::default()
-                },
-            )
-            .map_err(|e| e.to_string())?;
+                    ..SchemalessRangeQuery::default()
+                })
+                .map_err(|e| e.to_string())?;
             let mut count = 0u64;
             loop {
                 let batch = cursor.next_batch().map_err(|e| e.to_string())?;
@@ -359,15 +347,15 @@ impl KvStore for KvEngineStore {
     }
 
     async fn aggregate_scan(&self, plan: KvAggregateScan) -> Result<Vec<Vec<ColumnValue>>, String> {
-        let db = self.db.clone();
-        tokio::task::spawn_blocking(move || execute_aggregate_scan(&db, plan))
+        let table = self.table.clone();
+        tokio::task::spawn_blocking(move || execute_aggregate_scan(&table, plan))
             .await
             .map_err(|e| e.to_string())?
     }
 
     async fn begin_transaction(&self) -> Result<Box<dyn KvTransaction>, String> {
         Ok(Box::new(KvEngineTransaction {
-            db: self.db.clone(),
+            table: self.table.clone(),
             pending: Mutex::new(BTreeMap::new()),
         }))
     }

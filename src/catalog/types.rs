@@ -1,4 +1,7 @@
-use super::*;
+use std::sync::Arc;
+
+use crate::mem_store::KvStore;
+use crate::types::TableSchema;
 
 pub const DEFAULT_DATABASE_NAME: &str = "defaultdb";
 pub const DEFAULT_SCHEMA_NAME: &str = "public";

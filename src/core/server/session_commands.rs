@@ -1,4 +1,20 @@
-use super::*;
+use pgwire::api::ClientInfo;
+use pgwire::api::results::Response;
+use pgwire::error::PgWireResult;
+use sqlparser::ast::Statement;
+
+use super::GatewayServer;
+use super::shared::{
+    METADATA_CURRENT_SCHEMA, METADATA_SEARCH_PATH, MYSQL_AUTOCOMMIT_METADATA,
+    MYSQL_LOCK_WAIT_TIMEOUT_METADATA, MySqlLock, MySqlLockKind, next_key_prefix,
+    parse_mysql_autocommit_assignment, parse_nextval_query, parse_savepoint_identifier,
+    parse_search_path, parse_transaction_isolation,
+};
+use crate::core::response::{command_complete, empty_query_response, single_int8_row_response};
+use crate::error::user_error;
+use crate::types::{
+    ColumnValue, DataType, QueryPlan, ReadAccess, RowMap, TableSchema, WriteAccess,
+};
 
 impl GatewayServer {
     pub(super) async fn handle_session_command<C>(

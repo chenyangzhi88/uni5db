@@ -1,7 +1,9 @@
-use super::*;
+use std::sync::Arc;
+
 use crate::catalog::{DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME};
 use crate::codec::{cell_key, encode_cell_value, row_marker_key, schema_key};
-use crate::types::{ColumnSchema, RowMap};
+use crate::mem_store::KvStore;
+use crate::types::{ColumnSchema, ColumnValue, DataType, RowMap, TableSchema};
 
 pub(super) fn test_schema() -> TableSchema {
     TableSchema {

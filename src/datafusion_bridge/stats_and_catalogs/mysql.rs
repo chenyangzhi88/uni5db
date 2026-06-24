@@ -1,4 +1,22 @@
-use super::*;
+use std::sync::Arc;
+
+use arrow::array::{Int32Array, Int64Array, StringArray};
+use arrow::datatypes::{DataType as ArrowDataType, Field, Schema as ArrowSchema};
+use arrow::record_batch::RecordBatch;
+use datafusion::catalog::SchemaProvider;
+use datafusion::datasource::memory::MemTable;
+use pgwire::error::PgWireResult;
+
+use crate::catalog::CatalogStore;
+use crate::error::user_error;
+
+use super::super::{
+    mysql_info_character_length, mysql_info_column_key, mysql_info_column_nullable,
+    mysql_info_column_type, mysql_info_data_type, mysql_info_datetime_precision,
+    mysql_info_is_auto_increment, mysql_info_is_character_type, mysql_info_numeric_precision_scale,
+    mysql_info_push_constraint, register_empty_table,
+    register_mysql_information_schema_static_tables,
+};
 
 pub(in crate::datafusion_bridge) async fn register_mysql_information_schema(
     catalog: &CatalogStore,

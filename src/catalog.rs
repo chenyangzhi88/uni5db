@@ -1,24 +1,13 @@
-use std::sync::Arc;
-
-use pgwire::error::PgWireResult;
-use serde_json::{Value, json};
-use sqlparser::ast::{ObjectName, SchemaName};
-
-use crate::codec::{SCHEMA_PREFIX, schema_key};
-use crate::error::{unsupported, user_error};
-use crate::mem_store::KvStore;
-use crate::mode::GatewayMode;
-use crate::types::{
-    CheckConstraintSchema, ColumnSchema, ForeignKeyConstraintSchema, TableSchema,
-    UniqueConstraintSchema, parse_column_schema,
-};
-
 mod types;
-pub use types::*;
+pub use types::{
+    CatalogStore, DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME, DatabaseCatalog, IndexCatalog,
+    SchemaCatalog, TableCatalog, ViewCatalog,
+};
 mod codec;
-mod store;
-pub use codec::*;
+pub use codec::{
+    decode_table_schema, object_name_to_string, resolve_table_reference, schema_name_to_string,
+};
 mod legacy;
-use legacy::*;
+mod store;
 #[cfg(test)]
 mod tests;

@@ -1,4 +1,17 @@
-use super::*;
+use std::io;
+
+use async_trait::async_trait;
+use opensrv_mysql::{
+    AsyncMysqlShim, CapabilityFlags, ErrorKind, InitWriter, OkResponse, ParamParser,
+    QueryResultWriter, StatementMetaWriter,
+};
+use pgwire::api::METADATA_DATABASE;
+use tokio::io::AsyncWrite;
+
+use crate::core::server::GatewayServer;
+use crate::dialect::parser::{self, SqlDialect};
+
+use super::{MYSQL_SERVER_VERSION, MySqlBackend, MySqlPreparedStatement};
 
 #[async_trait]
 impl<W> AsyncMysqlShim<W> for MySqlBackend

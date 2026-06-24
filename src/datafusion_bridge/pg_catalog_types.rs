@@ -1,72 +1,24 @@
-use super::*;
+use std::sync::Arc;
 
-pub(super) fn scan_profile_enabled() -> bool {
-    matches!(
-        std::env::var("PG_GATEWAY_PROFILE_SCAN").as_deref(),
-        Ok("1") | Ok("true") | Ok("TRUE") | Ok("yes") | Ok("YES")
-    )
-}
+use arrow::array::{
+    Array, ArrayRef, BinaryArray, BooleanArray, Float32Array, Float64Array, Int32Array, Int64Array,
+    ListBuilder, StringArray, StringBuilder,
+};
+use arrow::datatypes::{DataType as ArrowDataType, Field, Schema as ArrowSchema};
+use arrow::record_batch::RecordBatch;
+use datafusion::catalog::SchemaProvider;
+use datafusion::common::{Result as DfResult, ScalarValue};
+use datafusion::datasource::memory::MemTable;
+use datafusion::logical_expr::{ScalarFunctionImplementation, Volatility, create_udf};
+use datafusion::physical_plan::ColumnarValue;
+use datafusion::prelude::SessionContext;
+use pgwire::error::PgWireResult;
 
-#[derive(Default)]
-pub(super) struct TopNScanProfile {
-    pub(super) records: AtomicU64,
-    pub(super) matched: AtomicU64,
-    pub(super) decode_ns: AtomicU64,
-    pub(super) filter_ns: AtomicU64,
-    pub(super) candidate_ns: AtomicU64,
-}
-
-pub(super) struct TopNCandidate {
-    pub(super) values: Vec<ColumnValue>,
-    pub(super) order_value: ColumnValue,
-    pub(super) pk_value: ColumnValue,
-}
-
-#[derive(Clone, Debug)]
-pub(super) struct FastTopNScanPlan {
-    pub(super) projector: storage_layout::FastNumericProjector,
-    pub(super) filter: FastPredicate,
-    pub(super) filter_slots: Vec<usize>,
-    pub(super) candidate_slots: Vec<usize>,
-    pub(super) order_slot: usize,
-    pub(super) pk_slot: Option<usize>,
-}
-
-#[derive(Clone, Debug)]
-pub(super) enum FastPredicate {
-    True,
-    Compare {
-        slot: usize,
-        op: KvCompareOp,
-        value: storage_layout::FastNumericValue,
-    },
-    And(Vec<FastPredicate>),
-    Or(Vec<FastPredicate>),
-    Not(Box<FastPredicate>),
-    IsNull {
-        slot: usize,
-    },
-    IsNotNull {
-        slot: usize,
-    },
-    Between {
-        slot: usize,
-        low: storage_layout::FastNumericValue,
-        high: storage_layout::FastNumericValue,
-        negated: bool,
-    },
-}
-
-#[derive(Clone, Debug)]
-pub(super) struct FastTopNCandidate {
-    pub(super) raw_value: Vec<u8>,
-    pub(super) order_value: storage_layout::FastNumericValue,
-    pub(super) pk_value: storage_layout::FastNumericValue,
-}
-
-pub(super) fn elapsed_ns_u64(started_at: Instant) -> u64 {
-    started_at.elapsed().as_nanos().min(u64::MAX as u128) as u64
-}
+use crate::catalog::{DEFAULT_DATABASE_NAME, IndexCatalog, TableCatalog, ViewCatalog};
+use crate::error::user_error;
+use crate::mem_store::KvStore;
+use crate::storage_layout;
+use crate::types::{DataType, TableSchema};
 
 pub(super) const PG_CATALOG_SCHEMA_NAME: &str = "pg_catalog";
 pub(super) const INFORMATION_SCHEMA_NAME: &str = "information_schema";

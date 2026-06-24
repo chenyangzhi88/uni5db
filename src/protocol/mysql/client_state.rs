@@ -1,4 +1,20 @@
-use super::*;
+use std::collections::HashMap;
+use std::io;
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::{Context, Poll};
+
+use futures::Sink;
+use opensrv_mysql::CapabilityFlags;
+use pgwire::api::{ClientInfo, METADATA_DATABASE, METADATA_USER};
+use pgwire::messages::response::TransactionStatus;
+use pgwire::messages::startup::SecretKey;
+use pgwire::messages::{PgWireBackendMessage, ProtocolVersion};
+
+use crate::catalog::DEFAULT_DATABASE_NAME;
+
+use super::{MYSQL_DEFAULT_SQL_MODE, MYSQL_SQL_MODE, MySqlBackend, MySqlWarning};
 
 impl Drop for MySqlBackend {
     fn drop(&mut self) {
